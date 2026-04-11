@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/youweichen/taurusdb-cli/sdk"
+	"github.com/youweichen/taurusdb-cli/internal/service"
 )
 
 var connectCmd = &cobra.Command{
@@ -27,21 +27,11 @@ func init() {
 func runConnect(profileName string) error {
 	fmt.Printf("正在连接华为云 TaurusDB (profile: %s)...\n", profileName)
 
-	client, err := sdk.NewGaussDBClient(profileName)
+	count, err := service.CheckConnection(profileName)
 	if err != nil {
 		return fmt.Errorf("连接失败: %w", err)
 	}
 
-	resp, err := client.ListInstances()
-	if err != nil {
-		return fmt.Errorf("连接失败: %w", err)
-	}
-
-	count := 0
-	if resp.Instances != nil {
-		count = len(*resp.Instances)
-	}
-
-	fmt.Printf("✓ 连接成功！当前 pr¬oject 下共有 %d 个 GaussDB 实例\n", count)
+	fmt.Printf("✓ 连接成功！当前 project 下共有 %d 个 GaussDB 实例\n", count)
 	return nil
 }

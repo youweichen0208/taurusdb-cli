@@ -82,11 +82,19 @@ func fuzzyMatchCommand(input string) string {
 			return s.Text
 		}
 	}
-	// 再找前缀匹配，返回第一个
+
+	// 再找前缀匹配，优先返回最短候选，避免 `/con` 之类输入
+	// 仅仅因为命令列表顺序而落到较长命令上。
+	best := ""
 	for _, s := range slashCommands {
 		if strings.HasPrefix(strings.ToLower(s.Text), lower) {
-			return s.Text
+			if best == "" || len(s.Text) < len(best) {
+				best = s.Text
+			}
 		}
+	}
+	if best != "" {
+		return best
 	}
 	return input
 }
