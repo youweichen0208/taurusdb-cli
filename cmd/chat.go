@@ -4,11 +4,13 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	prompt "github.com/c-bata/go-prompt"
 	"github.com/fatih/color"
 	"github.com/youweichen/taurusdb-cli/config"
+	"github.com/youweichen/taurusdb-cli/sdk"
 )
 
 // 定义所有斜杠指令
@@ -22,6 +24,8 @@ var slashCommands = []prompt.Suggest{
 	{Text: "/backup create", Description: "创建备份"},
 	{Text: "/backup list", Description: "列出备份"},
 	{Text: "/diagnose", Description: "诊断数据库问题"},
+	{Text: "/configure", Description: "配置华为云认证信息"},
+	{Text: "/connect", Description: "验证连接"},
 	{Text: "/status", Description: "查看当前配置和连接状态"},
 	{Text: "/help", Description: "显示帮助信息"},
 	{Text: "/clear", Description: "清屏"},
@@ -46,15 +50,94 @@ func executor(input string) {
 		return
 	}
 
-	// 单独输入 / 时打印可用指令列表
+	// 单独输入 / 时，直接执行第一个指令（等同于默认选中第一个）
 	if input == "/" {
-		printChatHelp()
-		fmt.Println("  💡 输入 / 后可用 ↑↓ 方向键选择指令")
-		fmt.Println()
+		first := slashCommands[0]
+		dim := color.New(color.FgHiBlack).SprintFunc()
+		fmt.Printf("  %s %s\n", dim("自动选择:"), color.CyanString(first.Text))
+		handleSlashCommand(first.Text)
 		return
 	}
 
+	// 模糊匹配：输入不完整的指令时自动匹配首选
+	if strings.HasPrefix(input, "/") {
+		matched := fuzzyMatchCommand(input)
+		if matched != input {
+			dim := color.New(color.FgHiBlack).SprintFunc()
+			fmt.Printf("  %s %s → %s\n", dim("自动匹配:"), input, color.CyanString(matched))
+		}
+		input = matched
+	}
+
 	handleSlashCommand(input)
+}
+
+// fuzzyMatchCommand 模糊匹配斜杠指令。
+// 输入不完整的指令（如 "/lis"、"/ins"）时，自动匹配第一个前缀匹配的完整指令。
+func fuzzyMatchCommand(input string) string {
+	lower := strings.ToLower(input)
+	// 先找完全匹配
+	for _, s := range slashCommands {
+		if strings.ToLower(s.Text) == lower {
+			return s.Text
+		}
+	}
+
+	// 再找前缀匹配，优先返回最短候选，避免 `/con` 之类输入
+	// 仅仅因为命令列表顺序而落到较长命令上。
+	best := ""
+	for _, s := range slashCommands {
+		if strings.HasPrefix(strings.ToLower(s.Text), lower) {
+			if best == "" || len(s.Text) < len(best) {
+				best = s.Text
+			}
+		}
+	}
+	if best != "" {
+		return best
+	}
+	return input
+}
+
+// readNumberInput 在 go-prompt 的 raw 模式下逐字节读取数字输入。
+// 返回值: >0 = 用户选择的编号, 0 = 直接按 Enter（空输入）, -1 = 取消(Ctrl+C)。
+func readNumberInput(maxChoice int) int {
+	buf := make([]byte, 1)
+	var input []byte
+
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil || n == 0 {
+			return -1
+		}
+		b := buf[0]
+
+		switch {
+		case b == 3: // Ctrl+C
+			fmt.Println()
+			return -1
+		case b == '\r' || b == '\n': // Enter
+			fmt.Println()
+			if len(input) == 0 {
+				return 0 // 空输入，由调用方决定默认值
+			}
+			num, err := strconv.Atoi(string(input))
+			if err != nil || num < 1 || num > maxChoice {
+				fmt.Printf(color.RedString("  ✗ 无效选择，请输入 1-%d\n"), maxChoice)
+				return -1
+			}
+			return num
+		case b == 127 || b == 8: // Backspace / DEL
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b") // 回退光标并清除字符
+			}
+		case b >= '0' && b <= '9': // 数字
+			input = append(input, b)
+			fmt.Print(string(b)) // 回显
+		}
+		// 其他字符静默忽略
+	}
 }
 
 func handleSlashCommand(input string) {
@@ -74,6 +157,18 @@ func handleSlashCommand(input string) {
 
 	case cmdText == "/status":
 		showStatus()
+
+	case cmdText == "/configure":
+		fmt.Println()
+		if chatDispatch != nil {
+			chatDispatch("configure")
+		}
+
+	case cmdText == "/connect":
+		fmt.Println()
+		if chatDispatch != nil {
+			chatDispatch("connect")
+		}
 
 	case strings.HasPrefix(cmdText, "/instance"),
 		strings.HasPrefix(cmdText, "/flavor"),
@@ -159,6 +254,7 @@ func printChatHelp() {
 
 func startChat() {
 	printChatBanner()
+	checkConfigOnStartup()
 
 	p := prompt.New(
 		executor,
@@ -166,6 +262,7 @@ func startChat() {
 		prompt.OptionPrefix("taurusdb> "),
 		prompt.OptionTitle("TaurusDB CLI"),
 		prompt.OptionPrefixTextColor(prompt.Cyan),
+		prompt.OptionCompletionOnDown(), // 允许用 ↓ 箭头触发/导航补全
 		prompt.OptionSuggestionBGColor(prompt.DarkGray),
 		prompt.OptionSuggestionTextColor(prompt.White),
 		prompt.OptionSelectedSuggestionBGColor(prompt.Purple),
@@ -174,4 +271,67 @@ func startChat() {
 		prompt.OptionDescriptionTextColor(prompt.LightGray),
 	)
 	p.Run()
+}
+
+// checkConfigOnStartup 启动时检查配置和连接状态
+func checkConfigOnStartup() {
+	dim := color.New(color.FgHiBlack).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+
+	// 1. 检查配置文件
+	cfg, err := config.Load(profile)
+	if err != nil {
+		fmt.Printf("  %s %s\n", red("✗"), "未检测到有效配置")
+		fmt.Printf("  %s\n", yellow("  请运行 /configure 配置华为云认证信息"))
+		fmt.Println()
+		return
+	}
+
+	// 2. 检查关键字段是否为空
+	missing := []string{}
+	if cfg.AK == "" {
+		missing = append(missing, "AK")
+	}
+	if cfg.SK == "" {
+		missing = append(missing, "SK")
+	}
+	if cfg.Region == "" {
+		missing = append(missing, "Region")
+	}
+	if cfg.ProjectID == "" {
+		missing = append(missing, "ProjectID")
+	}
+	if len(missing) > 0 {
+		fmt.Printf("  %s 配置不完整，缺少: %s\n", red("✗"), strings.Join(missing, ", "))
+		fmt.Printf("  %s\n", yellow("  请运行 /configure 补充配置"))
+		fmt.Println()
+		return
+	}
+
+	// 3. 尝试连接验证
+	fmt.Printf("  %s\n", dim("正在验证华为云连接..."))
+	client, err := sdk.NewGaussDBClient(profile)
+	if err != nil {
+		fmt.Printf("  %s 连接失败: %v\n", red("✗"), err)
+		fmt.Printf("  %s\n", yellow("  请运行 /configure 检查配置，或 /connect 重试"))
+		fmt.Println()
+		return
+	}
+
+	resp, err := client.ListInstances()
+	if err != nil {
+		fmt.Printf("  %s 连接失败: %v\n", red("✗"), err)
+		fmt.Printf("  %s\n", yellow("  请运行 /configure 检查配置，或 /connect 重试"))
+		fmt.Println()
+		return
+	}
+
+	count := 0
+	if resp.Instances != nil {
+		count = len(*resp.Instances)
+	}
+	fmt.Printf("  %s 连接成功！当前 project 下共有 %s 个实例\n", green("✓"), green(fmt.Sprintf("%d", count)))
+	fmt.Println()
 }

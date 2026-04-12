@@ -124,15 +124,24 @@ func executeCommand(root *cobra.Command, input string) {
 		return
 	}
 
-	cmd, _, err := root.Find(args)
+	cmd, remaining, err := root.Find(args)
 	if err != nil || cmd == root {
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", args[0])
 		return
 	}
-	cmd.SetArgs(args[1:])
-	if err := cmd.Execute(); err != nil {
-		errIcon := color.New(color.FgRed).Sprint("✗")
-		fmt.Fprintf(os.Stderr, "  %s %v\n", errIcon, err)
+
+	// 直接调用 RunE/Run，绕过 cobra 的 Execute 以避免在交互模式下的副作用
+	cmd.SetArgs(remaining)
+	if cmd.RunE != nil {
+		if err := cmd.RunE(cmd, remaining); err != nil {
+			errIcon := color.New(color.FgRed).Sprint("✗")
+			fmt.Fprintf(os.Stderr, "  %s %v\n", errIcon, err)
+		}
+	} else if cmd.Run != nil {
+		cmd.Run(cmd, remaining)
+	} else {
+		// 没有 Run/RunE，可能是父命令，显示帮助
+		cmd.Help()
 	}
 }
 
