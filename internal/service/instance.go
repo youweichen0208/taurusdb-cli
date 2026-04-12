@@ -23,3 +23,20 @@ func ListInstances(profile string) ([]model.MysqlInstanceListInfoUnifyStatus, er
 
 	return *resp.Instances, nil
 }
+
+// ShowInstance loads a single instance detail for the given profile through the official SDK.
+func ShowInstance(profile, instanceID string) (*model.MysqlInstanceInfoDetailUnifyStatus, error) {
+	client, err := sdk.NewGaussDBClient(profile)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.ShowInstance(instanceID)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Instance == nil {
+		return nil, nil
+	}
+	return resp.Instance, nil
+}

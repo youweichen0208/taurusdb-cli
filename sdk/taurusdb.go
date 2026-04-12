@@ -58,3 +58,13 @@ func (c *TaurusDBClient) ListInstances() (*model.ListGaussMySqlInstancesUnifySta
 	}
 	return response, nil
 }
+
+// ShowInstance returns the detailed information of a single TaurusDB instance.
+func (c *TaurusDBClient) ShowInstance(instanceID string) (*model.ShowGaussMySqlInstanceInfoUnifyStatusResponse, error) {
+	request := &model.ShowGaussMySqlInstanceInfoUnifyStatusRequest{InstanceId: instanceID}
+	response, err := c.inner.ShowGaussMySqlInstanceInfoUnifyStatus(request)
+	if err != nil {
+		return nil, translateSdkError(err)
+	}
+	return response, nil
+}
