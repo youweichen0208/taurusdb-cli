@@ -1,6 +1,8 @@
 .claude
 .idea
+.DS_Store
 open-taurus-specs
 .gocache/
 taurusdb-mac-amd64
-taurusdb
+node_modules/
+dist/

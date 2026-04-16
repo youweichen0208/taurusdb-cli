@@ -1,0 +1,33 @@
+{
+  "name": "taurusdb-cli",
+  "version": "0.1.0",
+  "description": "TypeScript rewrite of TaurusDB CLI",
+  "type": "module",
+  "bin": {
+    "taurusdb": "dist/index.js",
+    "taurusdb-ts": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "js-yaml": "^4.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.15.2",
+    "@types/prompts": "^2.4.9",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
