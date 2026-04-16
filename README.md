@@ -6,25 +6,37 @@ This repository is now fully TypeScript-based.
 
 - Node.js 20+
 
-## Install & Build
+## Quick Start
 
 ```bash
 npm install
 npm run build
+./taurusdb
 ```
 
 ## Run
 
-Use either:
+```bash
+./taurusdb
+```
+
+Show help:
 
 ```bash
 ./taurusdb --help
 ```
 
-or:
+Run directly with Node:
 
 ```bash
-node dist/index.js --help
+node dist/index.js
+```
+
+Install globally:
+
+```bash
+npm install -g .
+taurusdb --help
 ```
 
 ## Test
